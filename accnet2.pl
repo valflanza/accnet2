@@ -31,6 +31,9 @@ my $threshold;
 my $fast;
 my $total;
 my $clustering;
+my $coverage;
+my $evalue;
+my $minIdentity;
 
 
 
@@ -106,10 +109,13 @@ my $RUNPATH = getcwd();
 		
 		{OPT=>"in=s{,}",	VAR=>\@inFiles,	DESC=>"Proteome Files to analyze"},
 		{OPT=>"out=s",	VAR=>\$outFile,	DEFAULT => 'Network.csv', DESC=>"Network filename"},
-		{OPT=>"kp=s",	VAR=>\$kClustParameters,	DEFAULT => '-s 1.12 -c 0.8 -e 1e-4', DESC=>"'kClust parameters'"},
+		{OPT=>"coverage=s",	VAR=>\$coverage,	DEFAULT => '0.8', DESC=>"Min sequence coverage"},
+		{OPT=>"e-value=s",	VAR=>\$evalue,	DEFAULT => '1e-6', DESC=>"Max E-value"},
+		{OPT=>"identity=s",	VAR=>\$minIdentity,	DEFAULT => '0.8', DESC=>"Min sequence identity"},
+		#{OPT=>"kp=s",	VAR=>\$kClustParameters,	DEFAULT => '-s 1.12 -c 0.8 -e 1e-4', DESC=>"'kClust parameters'"},
 		{OPT=>"tblout=s",	VAR=>\$outTable,	DEFAULT => 'Table.csv', DESC=>"Table filename"},
 		{OPT=>"threshold=s",	VAR=>\$threshold,	DEFAULT => '1', DESC=>"Percent of genomes to consider coregenome (values > 1 includes coregenome to network)"},
-		{OPT=>"fast=s",	VAR=>\$fast,	DEFAULT => 'no', DESC=>"Skip the phylogenetic distance determination"},
+		{OPT=>"phylogenetic=s",	VAR=>\$fast,	DEFAULT => 'no', DESC=>"Edge-weigth as phylogenetic distance"},
 		{OPT=>"clustering=s", VAR=>\$clustering, DEFAULT => 'no', DESC=>"Perform the network clustering process?"},
 		{OPT=>"clean=s",	VAR=>\$clean,	DEFAULT => 'yes', DESC=>"Remove all the intermediary files"}
 		
@@ -188,7 +194,7 @@ close O;
 
 #system("$PATH/bin/kClust -i all_fasta.tmp -d ./kclust $kClustParameters");
 system("$PATH/bin/mmseqs createdb all_fasta.tmp all_fasta.mmseq");
-system("$PATH/bin/mmseqs cluster all_fasta.mmseq all_fasta.cluster . -c 0.8 -e 1e-6 --min-seq-id 0.8");
+system("$PATH/bin/mmseqs cluster all_fasta.mmseq all_fasta.cluster tmpDir -c $coverage -e $evalue --min-seq-id $minIdentity");
 system("$PATH/bin/mmseqs createtsv all_fasta.mmseq all_fasta.mmseq all_fasta.cluster all_fasta.cluster.tsv");
 system("$PATH/bin/mmseqs result2repseq all_fasta.mmseq all_fasta.cluster all_fasta.representatives");
 system("$PATH/bin/mmseqs result2flat all_fasta.mmseq all_fasta.mmseq all_fasta.representatives all_fasta.representatives.fasta --use-fasta-header");
@@ -342,6 +348,8 @@ foreach $k (keys(%clusters))
 		}else{
 			if($fast eq 'Y' | $fast eq 'Yes' | $fast eq 'yes' | $fast eq 'y')
 			{
+				push(@net,distance("Cluster_$clusterNum{$k}"));
+			}else{
 				open(TMP,"Cluster_$clusterNum{$k}.fasta");
 				@tmpArray = <TMP>;
 				@clusterFasta = grep(/>/,@tmpArray);
@@ -353,8 +361,7 @@ foreach $k (keys(%clusters))
 				}
 				
 				close TMP;
-			}else{
-				push(@net,distance("Cluster_$clusterNum{$k}"));
+				
 			}
 		}
 	}
@@ -446,7 +453,7 @@ if($clustering eq 'Y' | $clustering eq 'Yes' | $clustering eq 'yes' | $clusterin
 
 if($clean eq "yes")
 {
-	system("rm -r Cluster_* kclust outfile seq_temp temp all_fasta.tmp");
+	system("rm -r Cluster_* all_fasta.* tmpDir");
 }
 
 
