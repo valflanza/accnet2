@@ -28,7 +28,7 @@ my $kClustParameters = "-s 1.12 -c 0.8 -e 1e-4";  ###options by default;
 my $progress;
 my $clean;
 my $threshold;
-my $fast;
+my $phylo;
 my $total;
 my $clustering;
 my $coverage;
@@ -115,7 +115,7 @@ my $RUNPATH = getcwd();
 		#{OPT=>"kp=s",	VAR=>\$kClustParameters,	DEFAULT => '-s 1.12 -c 0.8 -e 1e-4', DESC=>"'kClust parameters'"},
 		{OPT=>"tblout=s",	VAR=>\$outTable,	DEFAULT => 'Table.csv', DESC=>"Table filename"},
 		{OPT=>"threshold=s",	VAR=>\$threshold,	DEFAULT => '1', DESC=>"Percent of genomes to consider coregenome (values > 1 includes coregenome to network)"},
-		{OPT=>"phylogenetic=s",	VAR=>\$fast,	DEFAULT => 'no', DESC=>"Edge-weigth as phylogenetic distance"},
+		{OPT=>"phylogenetic=s",	VAR=>\$phylo,	DEFAULT => 'no', DESC=>"Edge-weigth as phylogenetic distance"},
 		{OPT=>"clustering=s", VAR=>\$clustering, DEFAULT => 'no', DESC=>"Perform the network clustering process?"},
 		{OPT=>"clean=s",	VAR=>\$clean,	DEFAULT => 'yes', DESC=>"Remove all the intermediary files"}
 		
@@ -192,12 +192,19 @@ close O;
 
 ########## Clustering and post-proccess
 
-#system("$PATH/bin/kClust -i all_fasta.tmp -d ./kclust $kClustParameters");
+
 system("$PATH/bin/mmseqs createdb all_fasta.tmp all_fasta.mmseq");
-system("$PATH/bin/mmseqs cluster all_fasta.mmseq all_fasta.cluster tmpDir -c $coverage -e $evalue --min-seq-id $minIdentity");
+system("$PATH/bin/mmseqs linclust all_fasta.mmseq all_fasta.cluster tmpDir -c $coverage -e $evalue --min-seq-id $minIdentity");
 system("$PATH/bin/mmseqs createtsv all_fasta.mmseq all_fasta.mmseq all_fasta.cluster all_fasta.cluster.tsv");
 system("$PATH/bin/mmseqs result2repseq all_fasta.mmseq all_fasta.cluster all_fasta.representatives");
 system("$PATH/bin/mmseqs result2flat all_fasta.mmseq all_fasta.mmseq all_fasta.representatives all_fasta.representatives.fasta --use-fasta-header");
+
+#print("$PATH/bin/mmseqs createdb all_fasta.tmp all_fasta.mmseq");
+#print("$PATH/bin/mmseqs linclust all_fasta.mmseq all_fasta.cluster tmpDir -c $coverage -e $evalue --min-seq-id $minIdentity");
+#print("$PATH/bin/mmseqs createtsv all_fasta.mmseq all_fasta.mmseq all_fasta.cluster all_fasta.cluster.tsv");
+#print("$PATH/bin/mmseqs result2repseq all_fasta.mmseq all_fasta.cluster all_fasta.representatives");
+#print("$PATH/bin/mmseqs result2flat all_fasta.mmseq all_fasta.mmseq all_fasta.representatives all_fasta.representatives.fasta --use-fasta-header");
+
 
 open(FASTA,"all_fasta.tmp");
 @allFasta = <FASTA>;
@@ -256,55 +263,6 @@ foreach $l (@cls)
 ################################################################
 
 
-########################################################### obsoleto #######################################
-#open(HEAD,"./kclust/headers.dmp");
-#@headers = <HEAD>;
-#close HEAD;
-
-###### headers.dmp ###############
-##	1 >NC_014534|28		#
-##	88 >NC_009930|107	# File headers.dmp (index_sequence -> header)
-##	5301 >NC_010631|164	#
-##################################
-
-#foreach $l (@headers)
-#{
-	#chomp $l;
-	#@c = split(' ',$l);
-	#$c[1] =~ s/\s//g;
-	#$indexHeader{$c[0]} = $c[1];
-	
-#}
-
-#open(CLS,"./kclust/clusters.dmp");
-#@cls = <CLS>;
-#close CLS;
-
-#shift(@cls);
-############# clusters.dmp ###############
-##	# 40086 ->header (must remove)	#
-##	1 1				#
-##	88 1				#
-##	5301 1				# File clusters.dmp (index_sequence -> index_cluster(same as representative_sequence))
-##	20249 1				#
-##	40027 1				#
-##	40068 1				#
-##	2 2				#
-##########################################
-
-#foreach $l (@cls)
-#{
-	#chomp $l;
-	#@c = split(' ',$l);
-	#push(@{$clusters{$c[1]}},$fasta{$indexHeader{$c[0]}});
-	#push(@{$clustersMembers{$c[1]}},$indexHeader{$c[0]});
-	
-#}
-################### END Clustering and post-proccess
-
-############################################################################################
-
-
 
 
 ################## Distances calculation
@@ -316,11 +274,14 @@ $| = 1;  # Turn off buffering on STDOUT.
 
 foreach $k (keys(%clusters))
 {
-	
-	$output = join('',@{$clusters{$k}});
-	open(OUT,">Cluster_$clusterNum{$k}.fasta");
-	print OUT $output;
-	close OUT;
+	$phylo = lc($phylo);
+	if($phylo eq 'yes' | $phylo eq 'y' | $phylo eq 'Yes' | $phylo eq 'Y')
+	{
+		$output = join('',@{$clusters{$k}});
+		open(OUT,">Cluster_$clusterNum{$k}.fasta");
+		print OUT $output;
+		close OUT;
+	}
 	undef @uniqs;
 	undef %repeat;
 	foreach $member (@{$clustersMembers{$k}}) 
@@ -346,7 +307,7 @@ foreach $k (keys(%clusters))
 			@c = split('\|',$firstLine);
 			push(@net,"Cluster_$clusterNum{$k}\t$taxasHash{$c[0]}\t".scalar(@inFiles)/2 . "\tUndirected");
 		}else{
-			if($fast eq 'Y' | $fast eq 'Yes' | $fast eq 'yes' | $fast eq 'y')
+			if($phylo eq 'Y' | $phylo eq 'Yes' | $phylo eq 'yes' | $phylo eq 'y')
 			{
 				push(@net,distance("Cluster_$clusterNum{$k}"));
 			}else{
@@ -611,7 +572,7 @@ sub usage {
 	print "Usage:\n\n";
 	print "Accesory genes Network (ACCNET) v1.2\n";
 	print "writen by: Val F. Lanza (valfernandez.vf\@gmail.com)\n\n";
-	print "Accesory Network for genomes.\n\nSimple:		accnet.pl --in *.faa\nAdvance:	accnet.pl --in *.faa --threshold 0.8 --kp '-s 1.5 -e 1e-8 -c 0.8' --out Network_example.csv --tblout Table_example.csv --fast Yes --clustering Yes\n\nWhole genomes. Only recommended for plasmids or inter-species comparisson.\n\n		accnet.pl --in *.faa --threshold 1.1\n";
+	print "Accesory Network for genomes.\n\nSimple:		accnet.pl --in *.faa\nAdvance:	accnet.pl --in *.faa --threshold 0.8 --coverage 0.8 --e-value 1e-6 --identity 0.8 --out Network_example.csv --tblout Table_example.csv --fast Yes --clustering Yes\n\nWhole genomes. Only recommended for plasmids or inter-species comparisson.\n\n		accnet.pl --in *.faa --threshold 1.1\n";
 
 	print "\nParameters:\n\n";
 	foreach (@Options) {
